@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"gomokuAI/pkg/common"
 	"log"
@@ -41,34 +42,47 @@ func (c *Client) Read() {
 		tmp := strings.Split(msg, " ")[1:]
 		msg = strings.Join(strings.Split(msg, " ")[1:], " ")
 		if tp == 2 {
+			fmt.Printf("%s 进来了\n", c.ID)
 			chess := Player[c.ID]
 			x, _ := strconv.Atoi(tmp[0])
 			y, _ := strconv.Atoi(tmp[1])
 			fmt.Printf("玩家的位置： %d %d\n", x, y)
 			chess[x][y] = 1
-			fmt.Printf("first\n")
-			for i := 0; i < 15; i++ {
-				for j := 0; j < 15; j++ {
-					fmt.Printf("%d ", chess[i][j])
-				}
-				fmt.Printf("\n")
-			}
+			//fmt.Printf("first\n")
+			//for i := 0; i < 15; i++ {
+			//	for j := 0; j < 15; j++ {
+			//		if chess[j][i] == 0 {
+			//			fmt.Printf("-")
+			//		} else {
+			//			fmt.Printf("%d", chess[j][i])
+			//		}
+			//	}
+			//	fmt.Printf("\n")
+			//}
 			px, py := common.AI(chess)
 			chess[px][py] = 2
-			fmt.Printf("second\n")
-			for i := 0; i < 15; i++ {
-				for j := 0; j < 15; j++ {
-					fmt.Printf("%d ", chess[i][j])
-				}
-				fmt.Printf("\n")
-			}
+			//fmt.Printf("second\n")
+			//for i := 0; i < 15; i++ {
+			//	for j := 0; j < 15; j++ {
+			//		if chess[j][i] == 0 {
+			//			fmt.Printf("-")
+			//		} else {
+			//			fmt.Printf("%d", chess[j][i])
+			//		}
+			//	}
+			//	fmt.Printf("\n")
+			//}
 			Player[c.ID] = chess
 			fmt.Printf("AI的位置： %d %d\n", px, py)
 			c.Conn.WriteJSON("2 " + strconv.Itoa(px) + " " + strconv.Itoa(py))
+			fmt.Printf("%s 出去了\n", c.ID)
 		}
 		if tp == 3 {
+			id := uuid.New().String()
+			c.ID = id
 			Player[c.ID] = common.InitChess()
 			chess := Player[c.ID]
+			fmt.Printf("%s玩家进来了\n", c.ID)
 			fmt.Printf("当前玩家人数：%d\n", len(Player))
 			common.AIFirst = false
 			if msg == "0" {
@@ -81,6 +95,9 @@ func (c *Client) Read() {
 				Player[c.ID] = chess
 				common.AIFirst = true
 			}
+		}
+		if tp == 66 {
+			log.Printf("%s: %s\n", c.ID, msg)
 		}
 	}
 }

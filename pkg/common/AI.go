@@ -13,9 +13,8 @@ var oppoScore map[string]int64
 var comb map[string]int
 
 var AIFirst bool
-var chess [][]int
 
-func evalScore(player int) int64 {
+func evalScore(player, turn int, chess [][]int) int64 {
 	vis := make([][][]int, 15)
 	for i := 0; i < 15; i++ {
 		vis[i] = make([][]int, 15)
@@ -74,7 +73,8 @@ func evalScore(player int) int64 {
 					for i := 0; i < len(line)/2; i++ {
 						lc[i], lc[len(line)-1-i] = lc[len(line)-1-i], lc[i]
 					}
-					if player == 1 {
+					// 如果是对手
+					if player != turn && false {
 						if v, ok := oppoScore[line]; ok {
 							mxScore = max(v, mxScore)
 						} else if v, ok := oppoScore[string(lc)]; ok {
@@ -92,40 +92,43 @@ func evalScore(player int) int64 {
 			}
 		}
 	}
-	return finalScore + findComb(player)
+	return finalScore + findComb(player, chess)
 }
 
-func eval() int64 {
-	if AIFirst {
-		return evalScore(2) - evalScore(1)*2
-	}
-	return evalScore(2) - evalScore(1)*3
+func eval(turn int, chess [][]int) int64 {
+	//if AIFirst {
+	//	return evalScore(2, turn) - evalScore(1, turn)*2
+	//}
+	return evalScore(2, turn, chess) - evalScore(1, turn, chess)*3
 }
 
-var px, py int
-
-func AI(newChess [][]int) (int, int) {
-	chess = newChess
-	ab(5, -1000000000000000000, 1000000000000000, 2, 1)
-	fmt.Println(evalScore(1), evalScore(2))
+func AI(chess [][]int) (int, int) {
+	var px, py int
+	v := int(ab(4, -1000000000000000000, 1000000000000000, 2, 1, chess))
+	py = v % 100
+	px = v / 100
+	fmt.Println(evalScore(1, 1, chess), evalScore(2, 1, chess))
 	return px, py
 }
 
 var num int
 
-func ab(depth, alpha, beta, player, firstLevel int64) int64 {
+func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
+	var px, py int
 	if depth == 0 {
-		return eval()
+		// 轮到player， 但是player还没有下，故从player角度看问题
+		return eval(int(player), chess)
 	}
 	mx := make([][]int64, 0)
 	if player == 2 {
 		for i := 0; i < 15; i++ {
 			for j := 0; j < 15; j++ {
-				if chess[i][j] > 0 || notRelative(i, j) {
+				if chess[i][j] > 0 || notRelative(i, j, chess) {
 					continue
 				}
 				chess[i][j] = 2
-				mx = append(mx, []int64{eval(), int64(i), int64(j)})
+				// 这个时候AI下完了 那么是玩家下 评估局势需要从玩家角度，找到我们的oppoScore
+				mx = append(mx, []int64{eval(1, chess), int64(i), int64(j)})
 				chess[i][j] = 0
 			}
 		}
@@ -141,10 +144,13 @@ func ab(depth, alpha, beta, player, firstLevel int64) int64 {
 			j := mx[idx][2]
 			chess[i][j] = 2
 			ret := int64(0)
-			if Check(int(i), int(j), 2) {
-				ret = eval()
+			if Check(int(i), int(j), 2, chess) {
+				ret = eval(1, chess)
 			} else {
-				ret = ab(depth-1, alpha, beta, 3-player, 0)
+				ret = ab(depth-1, alpha, beta, 3-player, 0, chess)
+			}
+			if firstLevel > 0 {
+				fmt.Printf("位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)
 			}
 			chess[i][j] = 0
 			if ret > alpha {
@@ -158,15 +164,18 @@ func ab(depth, alpha, beta, player, firstLevel int64) int64 {
 				break
 			}
 		}
+		if firstLevel > 0 {
+			return int64(px*100 + py)
+		}
 		return alpha
 	} else {
 		for i := 0; i < 15; i++ {
 			for j := 0; j < 15; j++ {
-				if chess[i][j] > 0 || notRelative(i, j) {
+				if chess[i][j] > 0 || notRelative(i, j, chess) {
 					continue
 				}
 				chess[i][j] = 1
-				mx = append(mx, []int64{eval(), int64(i), int64(j)})
+				mx = append(mx, []int64{eval(2, chess), int64(i), int64(j)})
 				chess[i][j] = 0
 			}
 		}
@@ -181,10 +190,10 @@ func ab(depth, alpha, beta, player, firstLevel int64) int64 {
 			i := mx[idx][1]
 			j := mx[idx][2]
 			chess[i][j] = 1
-			if Check(int(i), int(j), 1) {
-				beta = min(beta, eval())
+			if Check(int(i), int(j), 1, chess) {
+				beta = min(beta, eval(2, chess))
 			} else {
-				beta = min(beta, ab(depth-1, alpha, beta, 3-player, 0))
+				beta = min(beta, ab(depth-1, alpha, beta, 3-player, 0, chess))
 			}
 			chess[i][j] = 0
 			if beta <= alpha {
@@ -195,7 +204,7 @@ func ab(depth, alpha, beta, player, firstLevel int64) int64 {
 	}
 }
 
-func findComb(player int) int64 {
+func findComb(player int, chess [][]int) int64 {
 	score := 0
 	vis := make([][]int, 15)
 	for i := 0; i < 15; i++ {
@@ -281,7 +290,7 @@ func findComb(player int) int64 {
 	return int64(score)
 }
 
-func findComb1(player int) int64 {
+func findComb1(player int, chess [][]int) int64 {
 	score := 0
 	for i := 0; i < 15; i++ {
 		for j := 0; j < 15; j++ {
@@ -364,9 +373,11 @@ func findComb1(player int) int64 {
 	return int64(score)
 }
 
+// AI会只顾及当前的破4子的蝇头小利，使得自己的分很高？为什么分会很高
+
 var param int
 
-func notRelative(x, y int) bool {
+func notRelative(x, y int, chess [][]int) bool {
 	for i := -param; i <= param; i++ {
 		for j := -param; j <= param; j++ {
 			if out(x+i, y+j) {
@@ -383,7 +394,7 @@ func notRelative(x, y int) bool {
 func InitAI() {
 	param = 2
 
-	num = 5
+	num = 12
 
 	dx = []int{1, 1, 1, 0}
 	dy = []int{-1, 0, 1, 1}
@@ -448,13 +459,15 @@ func InitAI() {
 	oppoScore["01110"] = 5000
 	oppoScore["010110"] = 5000
 	oppoScore["011010"] = 5000
+
+	oppoScore["211110"] = 50000
 	oppoScore["0111010"] = 60000
 	oppoScore["2111010"] = 50000
 	oppoScore["2101110"] = 60000
 	oppoScore["2101112"] = 50000
 	oppoScore["0110110"] = 40000
 	oppoScore["2110110"] = 35000
-	oppoScore["21101102"] = 35000
+	oppoScore["2110112"] = 35000
 	oppoScore["011011112"] = 60000
 	oppoScore["211011112"] = 60000
 	oppoScore["011101110"] = 80000
@@ -492,7 +505,7 @@ func InitChess() [][]int {
 	return chess
 }
 
-func Check(x, y, k int) bool {
+func Check(x, y, k int, chess [][]int) bool {
 	l := 0
 	r := 0
 	t := 0

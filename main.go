@@ -12,6 +12,14 @@ import (
 )
 
 func serveAI(w http.ResponseWriter, r *http.Request) {
+	ip := exnet.ClientPublicIP(r)
+	if ip == "" {
+		ip = exnet.ClientIP(r)
+	}
+	if strings.Contains(ip, ":") {
+		ip = strings.Split(ip, ":")[0]
+	}
+	util.AskIpAddr(ip)
 	log.Printf("wensocket enter")
 	conn, err := websocket.Upgrade(w, r)
 	if err != nil {
