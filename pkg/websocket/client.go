@@ -21,6 +21,7 @@ type Message struct {
 	Body     string `json:"body"`
 }
 
+// 存储玩家与棋盘
 var Player map[string][][]int
 
 func (c *Client) Read() {
@@ -48,30 +49,8 @@ func (c *Client) Read() {
 			y, _ := strconv.Atoi(tmp[1])
 			fmt.Printf("玩家的位置： %d %d\n", x, y)
 			chess[x][y] = 1
-			//fmt.Printf("first\n")
-			//for i := 0; i < 15; i++ {
-			//	for j := 0; j < 15; j++ {
-			//		if chess[j][i] == 0 {
-			//			fmt.Printf("-")
-			//		} else {
-			//			fmt.Printf("%d", chess[j][i])
-			//		}
-			//	}
-			//	fmt.Printf("\n")
-			//}
 			px, py := common.AI(chess)
 			chess[px][py] = 2
-			//fmt.Printf("second\n")
-			//for i := 0; i < 15; i++ {
-			//	for j := 0; j < 15; j++ {
-			//		if chess[j][i] == 0 {
-			//			fmt.Printf("-")
-			//		} else {
-			//			fmt.Printf("%d", chess[j][i])
-			//		}
-			//	}
-			//	fmt.Printf("\n")
-			//}
 			Player[c.ID] = chess
 			fmt.Printf("AI的位置： %d %d\n", px, py)
 			c.Conn.WriteJSON("2 " + strconv.Itoa(px) + " " + strconv.Itoa(py))
@@ -84,7 +63,6 @@ func (c *Client) Read() {
 			chess := Player[c.ID]
 			fmt.Printf("%s玩家进来了\n", c.ID)
 			fmt.Printf("当前玩家人数：%d\n", len(Player))
-			common.AIFirst = false
 			if msg == "0" {
 				c.Conn.WriteJSON(struct {
 					body string
@@ -93,7 +71,6 @@ func (c *Client) Read() {
 				})
 				chess[7][7] = 2
 				Player[c.ID] = chess
-				common.AIFirst = true
 			}
 		}
 		if tp == 66 {

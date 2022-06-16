@@ -3,18 +3,51 @@ package common
 import (
 	"fmt"
 	"sort"
+	"sync"
+	"time"
 )
 
 var dx []int
 var dy []int
 
+var Cnt int
+
 var score map[string]int64
-var oppoScore map[string]int64
-var comb map[string]int
 
-var AIFirst bool
+//记录先手与后手的得分
+var (
+	SecondScore map[int]int
+	FirstScore  map[int]int
+)
 
-func evalScore(player, turn int, chess [][]int) int64 {
+func calScore(block, num int) int {
+	if num >= 5 {
+		return 100000
+	}
+	if block == 2 {
+		return 0
+	}
+	c := 1
+	if block == 0 {
+		c *= 10
+	}
+	if num == 1 {
+		return 1 * c
+	}
+	if num == 2 {
+		return 10 * c
+	}
+	if num == 3 {
+		return 100 * c
+	}
+	if num == 4 {
+		return 1000 * c
+	}
+	return -1
+}
+
+// 无法拦截11101这种情况
+func evalScore1(player int, chess [][]int) int64 {
 	vis := make([][][]int, 15)
 	for i := 0; i < 15; i++ {
 		vis[i] = make([][]int, 15)
@@ -22,92 +55,169 @@ func evalScore(player, turn int, chess [][]int) int64 {
 			vis[i][j] = make([]int, 4)
 		}
 	}
-	finalScore := int64(0)
-	for i := -1; i < 15; i++ {
-		for j := -1; j < 15; j++ {
-			if i >= 0 && j >= 0 && chess[i][j] == player {
+	score := int64(0)
+	for i := 0; i < 15; i++ {
+		for j := 0; j < 15; j++ {
+			if chess[i][j] != player {
 				continue
 			}
 			for l := 0; l < 4; l++ {
-				if i >= 0 && j >= 0 && vis[i][j][l] > 0 {
+				if vis[i][j][l] > 0 {
 					continue
 				}
-				if i >= 0 && j >= 0 {
-					vis[i][j][l] = 1
+				step := 0
+				block := 0
+				px := i - dx[l]
+				py := j - dy[l]
+				if out(px, py) || chess[px][py] == 3-player {
+					block++
 				}
+				for true {
+					step++
+					xx := i + dx[l]*step
+					yy := j + dy[l]*step
+					if out(xx, yy) || chess[xx][yy] != player {
+						if out(xx, yy) || chess[xx][yy] == 3-player {
+							block++
+						}
+						break
+					}
+					vis[xx][yy][l] = 1
+				}
+				score += int64(calScore(block, step))
+			}
+		}
+	}
+	return score
+}
+
+func evalScorePara(player int, chess [][]int) int64 {
+	finalScore := int64(0)
+	var wt sync.WaitGroup
+	ans := make(chan int64, 4)
+	for l := 0; l < 4; l++ {
+		wt.Add(1)
+		go func(chess [][]int, l, player int) {
+			defer func() {
+				wt.Done()
+			}()
+			midScore := int64(0)
+			for i := 0; i < 15; i++ {
+				for j := 0; j < 15; j++ {
+					if chess[i][j] == 3-player {
+						continue
+					}
+					line := ""
+					step := 0
+					if chess[i][j] > 0 {
+						line += "1"
+					} else {
+						line += "0"
+					}
+					for len(line) < 6 {
+						step++
+						x := dx[l]*step + i
+						y := dy[l]*step + j
+						if out(x, y) || chess[x][y] == 3-player {
+							break
+						}
+						if chess[x][y] > 0 {
+							line += "1"
+						} else {
+							line += "0"
+						}
+					}
+					// 用sumscore or maxscore
+					maxScore := int64(0)
+					for len(line) >= 5 {
+						if v, ok := score[line]; ok {
+							maxScore = max(maxScore, v)
+						}
+						line = line[:(len(line) - 1)]
+					}
+					finalScore += maxScore
+				}
+			}
+			ans <- midScore
+		}(chess, l, player)
+	}
+	wt.Wait()
+	for l := 0; l < 4; l++ {
+		finalScore += <-ans
+	}
+	close(ans)
+	return finalScore //+ findComb(player, chess)
+}
+
+// 不并行平均10s
+func evalScore(player int, chess [][]int) int64 {
+	finalScore := int64(0)
+	for i := 0; i < 15; i++ {
+		for j := 0; j < 15; j++ {
+			if chess[i][j] == 3-player {
+				continue
+			}
+			for l := 0; l < 4; l++ {
 				line := ""
 				step := 0
-				if i < 0 || j < 0 || chess[i][j] > 0 {
-					line += "2"
+				if chess[i][j] > 0 {
+					line += "1"
 				} else {
 					line += "0"
 				}
-				zeroCnt := 0
-				for len(line) < 9 {
+				for len(line) < 6 {
 					step++
 					x := dx[l]*step + i
 					y := dy[l]*step + j
 					if out(x, y) || chess[x][y] == 3-player {
-						line += "2"
 						break
 					}
-					if chess[x][y] == 0 {
-						zeroCnt++
-					}
-					if zeroCnt >= 3 {
-						break
-					}
-					if step == 1 && chess[x][y] == 0 {
-						break
-					}
-					vis[x][y][l] = 1
 					if chess[x][y] > 0 {
 						line += "1"
 					} else {
 						line += "0"
 					}
 				}
-				mxScore := int64(0)
-				for len(line) >= 3 {
-					lc := []rune(line)
-					for i := 0; i < len(line)/2; i++ {
-						lc[i], lc[len(line)-1-i] = lc[len(line)-1-i], lc[i]
-					}
-					// 如果是对手
-					if player != turn && false {
-						if v, ok := oppoScore[line]; ok {
-							mxScore = max(v, mxScore)
-						} else if v, ok := oppoScore[string(lc)]; ok {
-							mxScore = max(v, mxScore)
-						}
-					}
+				// 用sumscore or maxscore
+				maxScore := int64(0)
+				for len(line) >= 5 {
 					if v, ok := score[line]; ok {
-						mxScore = max(v, mxScore)
-					} else if v, ok := score[string(lc)]; ok {
-						mxScore = max(v, mxScore)
+						maxScore = max(maxScore, v)
 					}
 					line = line[:(len(line) - 1)]
 				}
-				finalScore += mxScore
+				finalScore += maxScore
 			}
 		}
 	}
-	return finalScore + findComb(player, chess)
+	return finalScore //+ findComb(player, chess)
 }
 
-func eval(turn int, chess [][]int) int64 {
-	//if AIFirst {
-	//	return evalScore(2, turn) - evalScore(1, turn)*2
-	//}
-	return evalScore(2, turn, chess) - evalScore(1, turn, chess)*3
+func eval(chess [][]int) int64 {
+	return evalScore(2, chess) - evalScore(1, chess)
 }
 
 func AI(chess [][]int) (int, int) {
+	t := time.Now()
 	var px, py int
-	v := int(ab(4, -1000000000000000000, 1000000000000000, 2, 1, chess))
+	v := int(ab(6, -100000000000000, 1000000000000, 2, 1, chess))
 	py = v % 100
 	px = v / 100
-	fmt.Println(evalScore(1, 1, chess), evalScore(2, 1, chess))
+	//for d := int64(2); d <= 6; d += 2 {
+	//	v := int(ab(d, -100000000000000, 1000000000000, 2, 1, chess))
+	//	newScore := v / 10000
+	//	v -= newScore * 10000
+	//	py = v % 100
+	//	px = v / 100
+	//	// 有必胜方案直接退出
+	//	if newScore >= 10000 {
+	//		break
+	//	}
+	//}
+
+	fmt.Println(evalScore(1, chess), evalScore(2, chess))
+	elapsed := time.Since(t)
+	fmt.Println("cost time:", elapsed)
 	return px, py
 }
 
@@ -116,22 +226,38 @@ var num int
 func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
 	var px, py int
 	if depth == 0 {
-		// 轮到player， 但是player还没有下，故从player角度看问题
-		return eval(int(player), chess)
+		return eval(chess)
 	}
-	mx := make([][]int64, 0)
+	mx := make([][]int, 0)
+	var wt sync.WaitGroup
+	ans := make(chan []int, 225)
+	length := 0
 	if player == 2 {
 		for i := 0; i < 15; i++ {
 			for j := 0; j < 15; j++ {
 				if chess[i][j] > 0 || notRelative(i, j, chess) {
 					continue
 				}
-				chess[i][j] = 2
-				// 这个时候AI下完了 那么是玩家下 评估局势需要从玩家角度，找到我们的oppoScore
-				mx = append(mx, []int64{eval(1, chess), int64(i), int64(j)})
-				chess[i][j] = 0
+				length++
+				// 这个是按照贪心平分
+				wt.Add(1)
+				go func(i, j int, player int64, chess [][]int) {
+					defer func() {
+						wt.Done()
+					}()
+					v := solveFirst(chess, i, j, int(player)) + solveSecond(chess, i, j, 3-int(player))
+					ans <- []int{v, i, j}
+				}(i, j, player, chess)
+				//v := solveFirst(chess, i, j, int(player)) + solveSecond(chess, i, j, 3-int(player))
+				//mx = append(mx, []int{v, i, j})
 			}
 		}
+		wt.Wait()
+
+		for i := 0; i < length; i++ {
+			mx = append(mx, <-ans)
+		}
+		close(ans)
 		sort.Slice(mx, func(i, j int) bool {
 			return mx[i][0] < mx[j][0]
 		})
@@ -144,20 +270,20 @@ func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
 			j := mx[idx][2]
 			chess[i][j] = 2
 			ret := int64(0)
-			if Check(int(i), int(j), 2, chess) {
-				ret = eval(1, chess)
+			if Check(i, j, 2, chess) {
+				ret = eval(chess)
 			} else {
-				ret = ab(depth-1, alpha, beta, 3-player, 0, chess)
+				newChess := deepCopy(chess)
+				ret = ab(depth-1, alpha, beta, 3-player, firstLevel-1, newChess)
 			}
 			if firstLevel > 0 {
-				fmt.Printf("位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)
+				fmt.Printf("AI层 位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)
 			}
 			chess[i][j] = 0
 			if ret > alpha {
 				alpha = ret
 				if firstLevel > 0 {
-					px = int(i)
-					py = int(j)
+					px, py = i, j
 				}
 			}
 			if beta <= alpha {
@@ -174,13 +300,28 @@ func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
 				if chess[i][j] > 0 || notRelative(i, j, chess) {
 					continue
 				}
-				chess[i][j] = 1
-				mx = append(mx, []int64{eval(2, chess), int64(i), int64(j)})
-				chess[i][j] = 0
+				length++
+				// 这个是按照贪心平分
+				wt.Add(1)
+				go func(i, j int, player int64, chess [][]int) {
+					defer func() {
+						wt.Done()
+					}()
+					v := solveFirst(chess, i, j, int(player)) + solveSecond(chess, i, j, 3-int(player))
+					ans <- []int{v, i, j}
+				}(i, j, player, chess)
+				//v := solveFirst(chess, i, j, int(player)) + solveSecond(chess, i, j, 3-int(player))
+				//mx = append(mx, []int{v, i, j})
 			}
 		}
+		wt.Wait()
+
+		for i := 0; i < length; i++ {
+			mx = append(mx, <-ans)
+		}
+		close(ans)
 		sort.Slice(mx, func(i, j int) bool {
-			return mx[i][0] > mx[j][0]
+			return mx[i][0] < mx[j][0]
 		})
 		down := len(mx) - num
 		if down < 0 {
@@ -190,12 +331,18 @@ func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
 			i := mx[idx][1]
 			j := mx[idx][2]
 			chess[i][j] = 1
-			if Check(int(i), int(j), 1, chess) {
-				beta = min(beta, eval(2, chess))
+			ret := int64(0)
+			if Check(i, j, 1, chess) {
+				ret = eval(chess)
 			} else {
-				beta = min(beta, ab(depth-1, alpha, beta, 3-player, 0, chess))
+				newChess := deepCopy(chess)
+				ret = ab(depth-1, alpha, beta, 3-player, 0, newChess)
 			}
 			chess[i][j] = 0
+			if firstLevel > 0 {
+				fmt.Printf("玩家层 位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)
+			}
+			beta = min(beta, ret)
 			if beta <= alpha {
 				break
 			}
@@ -204,180 +351,14 @@ func ab(depth, alpha, beta, player, firstLevel int64, chess [][]int) int64 {
 	}
 }
 
-func findComb(player int, chess [][]int) int64 {
-	score := 0
-	vis := make([][]int, 15)
-	for i := 0; i < 15; i++ {
-		vis[i] = make([]int, 15)
-	}
-	for i := -1; i < 15; i++ {
-		for j := -1; j < 15; j++ {
-			if i >= 0 && j >= 0 && chess[i][j] == player {
-				continue
-			}
-			for l := 0; l < 4; l++ {
-				line := ""
-				step := 0
-				if i < 0 || j < 0 || chess[i][j] > 0 {
-					line += "2"
-				} else {
-					line += "0"
-				}
-				zeroCnt := 0
-				for len(line) < 8 {
-					step++
-					x := dx[l]*step + i
-					y := dy[l]*step + j
-					if out(x, y) || chess[x][y] == 3-player {
-						line += "2"
-						break
-					}
-					if chess[x][y] == 0 {
-						zeroCnt++
-					}
-					if zeroCnt >= 3 {
-						break
-					}
-					if step == 1 && chess[x][y] == 0 {
-						break
-					}
-					if chess[x][y] > 0 {
-						line += "1"
-					} else {
-						line += "0"
-					}
-				}
-				for len(line) >= 5 {
-					lc := []rune(line)
-					for i := 0; i < len(line)/2; i++ {
-						lc[i], lc[len(line)-1-i] = lc[len(line)-1-i], lc[i]
-					}
-					f := 0
-					if _, ok := comb[line]; ok {
-						for idx := 1; idx < len(line)-1; idx++ {
-							x := i + idx*dx[l]
-							y := j + idx*dy[l]
-							if chess[x][y] == player {
-								vis[x][y]++
-							}
-						}
-						f = 1
-					} else if _, ok := comb[string(lc)]; ok {
-						for idx := 1; idx < len(string(lc))-1; idx++ {
-							x := i + idx*dx[l]
-							y := j + idx*dy[l]
-							if chess[x][y] == player {
-								vis[x][y]++
-							}
-						}
-						f = 1
-					}
-					if f == 1 {
-						break
-					}
-					line = line[:(len(line) - 1)]
-				}
-			}
-		}
-	}
-	for i := 0; i < 15; i++ {
-		for j := 0; j < 15; j++ {
-			if vis[i][j] >= 2 {
-				score += 1000 * (1 << vis[i][j])
-			}
-		}
-	}
-	return int64(score)
-}
-
-func findComb1(player int, chess [][]int) int64 {
-	score := 0
-	for i := 0; i < 15; i++ {
-		for j := 0; j < 15; j++ {
-			if chess[i][j] != player {
-				continue
-			}
-			c3 := 0
-			c4 := 0
-			for l := 0; l < 4; l++ {
-				sep1 := 0
-				sep2 := 0
-				num1 := 0
-				num2 := 0
-				step := 0
-				for true {
-					step++
-					x := i + dx[l]*step
-					y := j + dy[l]*step
-					if out(x, y) || chess[x][y] == 3-player {
-						sep1 = 1
-						sep2 = 1
-						break
-					}
-					if step > 1 && chess[x][y] == 0 {
-						break
-					}
-					if step == 1 && chess[x][y] == 0 {
-						sep1 = 1
-						num1--
-					}
-					num1++
-				}
-				if sep1*sep2 == 1 {
-					continue
-				}
-				step = 0
-				for true {
-					step++
-					x := i - dx[l]*step
-					y := j - dy[l]*step
-					if out(x, y) || chess[x][y] == 3-player {
-						sep1 = 1
-						sep2 = 1
-						break
-					}
-					// 此处考虑不周，需要更改
-					if step > 1 && chess[x][y] == 0 {
-						break
-					}
-					if step == 1 && chess[x][y] == 0 {
-						sep2 = 1
-						num2--
-					}
-					num2++
-				}
-				if sep1*sep2 == 1 {
-					continue
-				}
-				if num1+num2 == 2 {
-					c3++
-				}
-				if num1+num2 == 3 {
-					c4++
-					if sep1+sep2 == 1 {
-						if sep1 == 1 && num1 == 2 {
-							c4--
-						}
-						if sep2 == 1 && num2 == 2 {
-							c4--
-						}
-					}
-				}
-			}
-			if c3+c4 >= 2 {
-				v := 1000 * (1 << c3) * (1 << c4)
-				score += v + 500*c4
-			}
-		}
-	}
-	return int64(score)
-}
-
-// AI会只顾及当前的破4子的蝇头小利，使得自己的分很高？为什么分会很高
-
 var param int
 
 func notRelative(x, y int, chess [][]int) bool {
+	if Cnt <= 0 {
+		param = 1
+	} else {
+		param = 2
+	}
 	for i := -param; i <= param; i++ {
 		for j := -param; j <= param; j++ {
 			if out(x+i, y+j) {
@@ -392,105 +373,62 @@ func notRelative(x, y int, chess [][]int) bool {
 }
 
 func InitAI() {
+	// 后续需要存储以保证并行
+	Cnt = 0
+
 	param = 2
 
-	num = 12
+	num = 10
 
 	dx = []int{1, 1, 1, 0}
 	dy = []int{-1, 0, 1, 1}
 
 	score = make(map[string]int64)
 
-	// 这个棋型在对面分要高一点，我就需要进行堵
-	oppoScore = make(map[string]int64)
+	FirstScore = make(map[int]int)
+	SecondScore = make(map[int]int)
 
-	comb = make(map[string]int)
-	// 1
-	score["010"] = 10
+	// first
+	FirstScore[0] = 7
+	FirstScore[1] = 35
+	FirstScore[2] = 800
+	FirstScore[3] = 15000
+	FirstScore[4] = 800000
 
-	// 2
-	score["0110"] = 100
-	score["2110"] = 20
-	score["01010"] = 50
-	score["21010"] = 10
+	//second
+	SecondScore[0] = 0
+	SecondScore[1] = 15
+	SecondScore[2] = 400
+	SecondScore[3] = 1800
+	SecondScore[4] = 100000
 
-	//3
+	// score
 
-	score["01110"] = 1000
-	score["21110"] = 200
-	score["011010"] = 800
-	score["211010"] = 200
-	score["210110"] = 200
-	score["0110010"] = 300
-	score["2110010"] = 30
-	score["2100110"] = 200
-	score["0101010"] = 500
-	score["2101010"] = 400
+	score["11111"] = 500000
+	score["011110"] = 4320
+	score["011100"] = 720
+	score["001110"] = 720
+	score["011010"] = 720
+	score["010110"] = 720
+	score["11110"] = 720
+	score["01111"] = 720
+	score["11011"] = 720
+	score["10111"] = 720
+	score["11101"] = 720
+	score["001100"] = 120
+	score["001010"] = 120
+	score["010100"] = 120
+	score["000100"] = 20
+	score["001000"] = 20
+}
 
-	//4
-	score["011110"] = 100000
-	score["211110"] = 6000
-	score["0111010"] = 6000
-	score["2111010"] = 3000
-	score["2101110"] = 6000
-	score["2101112"] = 3000
-	score["0110110"] = 6000
-	score["2110110"] = 2000
-
-	// 5
-	score["0111110"] = 999999999
-	score["2111110"] = 999999999
-	score["2111112"] = 999999999
-	score["01011112"] = 8000
-	score["21011112"] = 8000
-	score["01101110"] = 9000
-	score["21101110"] = 9000
-	score["01101112"] = 8500
-	score["21101112"] = 8000
-
-	//6
-	score["011101110"] = 8000
-	score["211101110"] = 7000
-	score["211101112"] = 6000
-	score["011011112"] = 9000
-	score["211011112"] = 8000
-
-	// oppoScore
-	oppoScore["01110"] = 5000
-	oppoScore["010110"] = 5000
-	oppoScore["011010"] = 5000
-
-	oppoScore["211110"] = 50000
-	oppoScore["0111010"] = 60000
-	oppoScore["2111010"] = 50000
-	oppoScore["2101110"] = 60000
-	oppoScore["2101112"] = 50000
-	oppoScore["0110110"] = 40000
-	oppoScore["2110110"] = 35000
-	oppoScore["2110112"] = 35000
-	oppoScore["011011112"] = 60000
-	oppoScore["211011112"] = 60000
-	oppoScore["011101110"] = 80000
-	oppoScore["211101110"] = 70000
-	oppoScore["211101112"] = 60000
-
-	//comb
-	// 3
-	comb["01110"] = 0
-	comb["011010"] = 0
-	// 4
-	comb["0101110"] = 1
-	comb["0101112"] = 1
-	comb["2101110"] = 1
-	comb["2101112"] = 1
-	comb["0110110"] = 1
-	comb["2110110"] = 1
-	comb["2110112"] = 1
-	// 5
-	comb["01101110"] = 1
-	comb["21101110"] = 1
-	comb["01101112"] = 1
-	comb["21101112"] = 1
+func deepCopy(chess [][]int) [][]int {
+	newChess := make([][]int, 15)
+	for i := 0; i < 15; i++ {
+		newChess[i] = make([]int, 15)
+		copy(newChess[i], chess[i])
+	}
+	return newChess
 }
 
 func out(x, y int) bool {
