@@ -7,6 +7,15 @@ import (
 )
 
 func AskIpAddr(ip string) {
+	go func() {
+		defer func() {
+			recover()
+		}()
+		//askIpAddr(ip)
+	}()
+}
+
+func askIpAddr(ip string) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "http://43.142.132.19:5000?ip="+ip, nil)
 	if err != nil {

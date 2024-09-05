@@ -23,6 +23,7 @@ type Message struct {
 
 // 存储玩家与棋盘
 var Player map[string][][]int
+var FirstPlayer map[string]string
 
 func (c *Client) Read() {
 	defer func() {
@@ -49,7 +50,10 @@ func (c *Client) Read() {
 			y, _ := strconv.Atoi(tmp[1])
 			fmt.Printf("玩家的位置： %d %d\n", x, y)
 			chess[x][y] = 1
-			px, py := common.AI(chess)
+			px, py := common.AI(&common.Context{
+				ID:          c.ID,
+				FirstPlayer: FirstPlayer[c.ID],
+			}, chess)
 			chess[px][py] = 2
 			Player[c.ID] = chess
 			fmt.Printf("AI的位置： %d %d\n", px, py)
@@ -57,12 +61,15 @@ func (c *Client) Read() {
 			fmt.Printf("%s 出去了\n", c.ID)
 		}
 		if tp == 3 {
+			common.Cnt = 0
 			id := uuid.New().String()
 			c.ID = id
 			Player[c.ID] = common.InitChess()
+			common.InitAI()
 			chess := Player[c.ID]
 			fmt.Printf("%s玩家进来了\n", c.ID)
 			fmt.Printf("当前玩家人数：%d\n", len(Player))
+			FirstPlayer[c.ID] = "human"
 			if msg == "0" {
 				c.Conn.WriteJSON(struct {
 					body string
@@ -71,6 +78,7 @@ func (c *Client) Read() {
 				})
 				chess[7][7] = 2
 				Player[c.ID] = chess
+				FirstPlayer[c.ID] = "AI"
 			}
 		}
 		if tp == 66 {
