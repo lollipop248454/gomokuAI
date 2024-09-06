@@ -156,3 +156,13 @@ func Min(a, b int64) int64 {
 func Out(x, y int) bool {
 	return x < 0 || x >= 15 || y < 0 || y >= 15
 }
+
+func CountChar(s string, c byte) int {
+	ans := 0
+	for i := range s {
+		if s[i] == c {
+			ans++
+		}
+	}
+	return ans
+}

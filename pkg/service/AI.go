@@ -11,73 +11,73 @@ import (
 	"time"
 )
 
-func evalScorePara(ctx *common.Context, player int, chess [][]int) int64 {
-	finalScore := int64(0)
-	var wt sync.WaitGroup
-	ans := make(chan int64, 4)
-	for l := 0; l < 4; l++ {
-		wt.Add(1)
-		go func(chess [][]int, l, player int) {
-			defer func() {
-				wt.Done()
-			}()
-			midScore := int64(0)
-			for i := 0; i < 15; i++ {
-				for j := 0; j < 15; j++ {
-					if chess[i][j] == 3-player || common.NotRelative(ctx, i, j, 2, chess) {
-						continue
-					}
-					count := 1
-					var buffer bytes.Buffer
-					step := 0
-					if chess[i][j] > 0 {
-						buffer.WriteString("1")
-					} else {
-						buffer.WriteString("0")
-					}
-					for count < 6 {
-						step++
-						x := dal.Dx[l]*step + i
-						y := dal.Dy[l]*step + j
-						if util.Out(x, y) || chess[x][y] == 3-player {
-							break
-						}
-						if chess[x][y] > 0 {
-							buffer.WriteString("1")
-						} else {
-							buffer.WriteString("0")
-						}
-						count++
-					}
-					line := buffer.String()
-					// 用sumscore or maxscore
-					maxScore := int64(0)
-					for len(line) >= 5 {
-						if v, ok := dal.Score[line]; ok {
-							maxScore = util.Max(maxScore, v)
-						}
-						line = line[:(len(line) - 1)]
-					}
-					midScore += maxScore
-				}
-			}
-			ans <- midScore
-		}(chess, l, player)
-	}
-	wt.Wait()
-	for l := 0; l < 4; l++ {
-		finalScore += <-ans
-	}
-	close(ans)
-	return finalScore //+ findComb(player, chess)
-}
+//func evalScorePara(ctx *common.Context, player int, chess [][]int) int64 {
+//	finalScore := int64(0)
+//	var wt sync.WaitGroup
+//	ans := make(chan int64, 4)
+//	for l := 0; l < 4; l++ {
+//		wt.Add(1)
+//		go func(chess [][]int, l, player int) {
+//			defer func() {
+//				wt.Done()
+//			}()
+//			midScore := int64(0)
+//			for i := 0; i < 15; i++ {
+//				for j := 0; j < 15; j++ {
+//					if chess[i][j] == 3-player || common.NotRelative(ctx, i, j, 2, chess) {
+//						continue
+//					}
+//					count := 1
+//					var buffer bytes.Buffer
+//					step := 0
+//					if chess[i][j] > 0 {
+//						buffer.WriteString("1")
+//					} else {
+//						buffer.WriteString("0")
+//					}
+//					for count < 6 {
+//						step++
+//						x := dal.Dx[l]*step + i
+//						y := dal.Dy[l]*step + j
+//						if util.Out(x, y) || chess[x][y] == 3-player {
+//							break
+//						}
+//						if chess[x][y] > 0 {
+//							buffer.WriteString("1")
+//						} else {
+//							buffer.WriteString("0")
+//						}
+//						count++
+//					}
+//					line := buffer.String()
+//					// 用sumscore or maxscore
+//					maxScore := int64(0)
+//					for len(line) >= 5 {
+//						if v, ok := dal.Score[line]; ok {
+//							maxScore = util.Max(maxScore, v)
+//						}
+//						line = line[:(len(line) - 1)]
+//					}
+//					midScore += maxScore
+//				}
+//			}
+//			ans <- midScore
+//		}(chess, l, player)
+//	}
+//	wt.Wait()
+//	for l := 0; l < 4; l++ {
+//		finalScore += <-ans
+//	}
+//	close(ans)
+//	return finalScore //+ findComb(player, chess)
+//}
 
 // 不并行平均10s
 func evalScore(ctx *common.Context, player int, chess [][]int) int64 {
 	finalScore := int64(0)
 	for i := 0; i < 15; i++ {
 		for j := 0; j < 15; j++ {
-			if chess[i][j] == 3-player || common.NotRelative(ctx, i, j, 2, chess) {
+			if chess[i][j] == 3-player || ctx.UnRelativeMap[i*100+j] { //common.NotRelative(ctx, i, j, 2, chess)
 				continue
 			}
 			for l := 0; l < 4; l++ {
@@ -120,9 +120,9 @@ func evalScore(ctx *common.Context, player int, chess [][]int) int64 {
 }
 
 func eval(ctx *common.Context, chess [][]int) int64 {
-	//defer func(tm time.Time) {
-	//	util.AddTime(util.GetCurrentFuncName()+ctx.ID, time.Since(tm))
-	//}(time.Now())
+	defer func(tm time.Time) {
+		util.AddTime(util.GetCurrentFuncName()+ctx.ID, time.Since(tm))
+	}(time.Now())
 	aiScore := int64(0)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -144,12 +144,12 @@ func eval(ctx *common.Context, chess [][]int) int64 {
 
 func getInitDeep(ctx *common.Context) int64 {
 	cnt := dal.CntMap[ctx.ID]
-	deep := int64(6)
+	deep := int64(4)
+	if cnt > 1 {
+		deep = 6
+	}
 	if cnt > 3 {
 		deep = 8
-	}
-	if cnt > 5 {
-		deep = 10
 	}
 	// 先手前期直接追杀
 	if ctx.FirstPlayer == "AI" {
@@ -157,7 +157,7 @@ func getInitDeep(ctx *common.Context) int64 {
 		deep = util.Min(deep, 9)
 	}
 	if cnt > 6 {
-		deep = 11
+		deep = 13
 		//switch cnt % 2 {
 		//case 0:
 		//	deep = 11
@@ -167,11 +167,8 @@ func getInitDeep(ctx *common.Context) int64 {
 		//	deep = 8
 		//}
 	}
-	if cnt > 10 {
-		deep = 12
-	}
 	if cnt > 25 {
-		deep = 8
+		deep = 9
 	}
 	//if cnt > 34 {
 	//	deep = 7
@@ -192,6 +189,7 @@ func getInitDeep(ctx *common.Context) int64 {
 func AI(ctx *common.Context, chess [][]int) (int, int) {
 	dal.CntMap[ctx.ID]++
 	util.ClearTimeMap()
+	ctx.UnRelativeMap = common.GetUnRelativeMap(ctx, chess)
 	t := time.Now()
 	var px, py int
 	deep := getInitDeep(ctx)
@@ -290,7 +288,7 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			i := mx[idx][1]
 			j := mx[idx][2]
 
-			if time.Since(tm).Seconds() > 10 {
+			if time.Since(tm).Seconds() > 15 {
 				dal.NumMap[ctx.ID] = 5
 				//break
 			}
@@ -299,6 +297,8 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			//	down--
 			//}
 			chess[i][j] = 2
+			originUnRelativeMap := ctx.UnRelativeMap
+			common.UpdateUnRelativeMap(ctx.UnRelativeMap, i, j)
 			ret := int64(0)
 			if util.Check(i, j, 2, chess) {
 				//ret = eval(chess)
@@ -306,6 +306,7 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			} else {
 				ret = abWithCache(ctx, depth-1, alpha, beta, 3-player, firstLevel-1, chess)
 			}
+			ctx.UnRelativeMap = originUnRelativeMap
 			if firstLevel > 0 {
 				fmt.Printf("AI层 位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)
 				if len(mx)-1-idx > 3 && dal.NumMap[ctx.ID] > 5 {
@@ -352,6 +353,8 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			i := mx[idx][1]
 			j := mx[idx][2]
 			chess[i][j] = 1
+			originUnRelativeMap := ctx.UnRelativeMap
+			common.UpdateUnRelativeMap(ctx.UnRelativeMap, i, j)
 			ret := int64(0)
 			if util.Check(i, j, 1, chess) {
 				//ret = eval(chess)
@@ -359,6 +362,7 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			} else {
 				ret = abWithCache(ctx, depth-1, alpha, beta, 3-player, firstLevel-1, chess)
 			}
+			ctx.UnRelativeMap = originUnRelativeMap
 			chess[i][j] = 0
 			if firstLevel > 0 {
 				fmt.Printf("玩家层 位置,得分,alpha：%d %d %d %d\n", i, j, mx[idx][0], ret)

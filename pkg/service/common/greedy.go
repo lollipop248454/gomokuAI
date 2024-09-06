@@ -8,9 +8,22 @@ import (
 	"gomokuAI/pkg/dal"
 	"gomokuAI/pkg/util"
 	"sort"
-	"strings"
 	"sync"
+	"time"
 )
+
+func solve(ctx *Context, chess [][]int, x, y, player int) int {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	first := 0
+	go func() {
+		defer wg.Done()
+		first = solveFirst(ctx, chess, x, y, player)
+	}()
+	second := solveSecond(ctx, chess, x, y, 3-player)
+	wg.Wait()
+	return first + second
+}
 
 // 这个位置对自己的作用 我下在这能有多少分
 // 不用考虑是否被0分割，因为会从头到尾遍历，靠近x,y的最终分也高
@@ -52,8 +65,8 @@ func solveFirst(ctx *Context, chess [][]int, x, y, player int) int {
 			line = fmt.Sprintf("%s%s", line, s)
 		}
 		s := exstrings.SubString(line, 0, 5)
-		count1 := strings.Count(s, "1")
-		count2 := strings.Count(s, "2")
+		count1 := util.CountChar(s, '1')
+		count2 := util.CountChar(s, '2')
 		for i := 0; i < 5; i++ {
 			if count2 == 0 {
 				initScore += int(float64(dal.FirstScore[count1]) / k)
@@ -118,8 +131,9 @@ func solveSecond(ctx *Context, chess [][]int, x, y, player int) int {
 			line = fmt.Sprintf("%s%s", line, s)
 		}
 		s := exstrings.SubString(line, 0, 5)
-		count1 := strings.Count(s, "1")
-		count2 := strings.Count(s, "2")
+		//count1 := strings.Count(s, "1")
+		count1 := util.CountChar(s, '1')
+		count2 := util.CountChar(s, '2')
 		for i := 0; i < 5; i++ {
 			if count2 == 0 {
 				initScore += int(float64(dal.SecondScore[count1]) / k)
@@ -146,9 +160,9 @@ func solveSecond(ctx *Context, chess [][]int, x, y, player int) int {
 }
 
 func GetMaxGreedyInfo(ctx *Context, chess [][]int, player int64) [][]int {
-	//defer func(tm time.Time) {
-	//	util.AddTime(util.GetCurrentFuncName()+ctx.ID, time.Since(tm))
-	//}(time.Now())
+	defer func(tm time.Time) {
+		util.AddTime(util.GetCurrentFuncName()+ctx.ID, time.Since(tm))
+	}(time.Now())
 	mx := make([][]int, 0)
 	key := util.GenCacheKey(struct {
 		Chess  [][]int `json:"chess"`
@@ -177,16 +191,16 @@ func getMaxGreedyInfo(ctx *Context, chess [][]int, player int64) [][]int {
 	ans := make(chan []int, 225)
 	for i := 0; i < 15; i++ {
 		for j := 0; j < 15; j++ {
+			if chess[i][j] > 0 || ctx.UnRelativeMap[i*100+j] { // NotRelative(ctx, i, j, 2, chess)
+				continue
+			}
 			// 这个是按照贪心平分
 			wt.Add(1)
 			go func(i, j int, player int64, chess [][]int) {
 				defer func() {
 					wt.Done()
 				}()
-				if chess[i][j] > 0 || NotRelative(ctx, i, j, 2, chess) {
-					return
-				}
-				v := solveFirst(ctx, chess, i, j, int(player)) + solveSecond(ctx, chess, i, j, 3-int(player))
+				v := solve(ctx, chess, i, j, int(player))
 				ans <- []int{v, i, j}
 			}(i, j, player, chess)
 		}
@@ -223,4 +237,29 @@ func NotRelative(ctx *Context, x, y, length int, chess [][]int) bool {
 		}
 	}
 	return true
+}
+
+func GetUnRelativeMap(ctx *Context, chess [][]int) map[int]bool {
+	res := make(map[int]bool)
+	for i := 0; i < 15; i++ {
+		for j := 0; j < 15; j++ {
+			res[i*100+j] = false
+			// 这个点为空并且边上没有
+			if chess[i][j] == 0 && NotRelative(ctx, i, j, 2, chess) {
+				res[i*100+j] = true
+			}
+		}
+	}
+	return res
+}
+
+func UpdateUnRelativeMap(unRelativeMap map[int]bool, x, y int) {
+	for i := -2; i <= 2; i++ {
+		for j := -2; j <= 2; j++ {
+			if util.Out(x+i, y+j) {
+				continue
+			}
+			unRelativeMap[(x+i)*100+(y+j)] = false
+		}
+	}
 }

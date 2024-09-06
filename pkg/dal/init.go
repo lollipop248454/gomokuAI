@@ -28,7 +28,7 @@ func init() {
 	CntMap = make(map[string]int)
 	NumMap = make(map[string]int)
 
-	ScoreMultiNum = 1.5
+	ScoreMultiNum = 1
 
 	Param = 2
 
