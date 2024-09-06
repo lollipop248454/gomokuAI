@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/thinkeridea/go-extend/exnet"
-	"gomokuAI/pkg/common"
 	"gomokuAI/pkg/util"
 	"gomokuAI/pkg/websocket"
 	"log"
@@ -33,8 +32,6 @@ func serveAI(w http.ResponseWriter, r *http.Request) {
 }
 
 func setupRoutes() {
-	common.InitAI()
-	common.InitCache()
 	websocket.Player = make(map[string][][]int)
 	websocket.FirstPlayer = make(map[string]string)
 

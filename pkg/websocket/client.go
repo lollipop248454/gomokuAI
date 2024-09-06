@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"gomokuAI/pkg/common"
+	"gomokuAI/pkg/dal"
+	"gomokuAI/pkg/service"
+	"gomokuAI/pkg/service/common"
 	"log"
 	"strconv"
 	"strings"
@@ -50,7 +52,7 @@ func (c *Client) Read() {
 			y, _ := strconv.Atoi(tmp[1])
 			fmt.Printf("玩家的位置： %d %d\n", x, y)
 			chess[x][y] = 1
-			px, py := common.AI(&common.Context{
+			px, py := service.AI(&common.Context{
 				ID:          c.ID,
 				FirstPlayer: FirstPlayer[c.ID],
 			}, chess)
@@ -61,11 +63,11 @@ func (c *Client) Read() {
 			fmt.Printf("%s 出去了\n", c.ID)
 		}
 		if tp == 3 {
-			common.Cnt = 0
+			dal.CntMap[c.ID] = 0
 			id := uuid.New().String()
 			c.ID = id
-			Player[c.ID] = common.InitChess()
-			common.InitAI()
+			Player[c.ID] = dal.InitChess()
+			dal.InitAI(c.ID)
 			chess := Player[c.ID]
 			fmt.Printf("%s玩家进来了\n", c.ID)
 			fmt.Printf("当前玩家人数：%d\n", len(Player))
