@@ -157,9 +157,9 @@ func Out(x, y int) bool {
 	return x < 0 || x >= 15 || y < 0 || y >= 15
 }
 
-func CountChar(s string, c byte) int {
+func CountChar(s string, n int, c byte) int {
 	ans := 0
-	for i := range s {
+	for i := 0; i < n; i++ {
 		if s[i] == c {
 			ans++
 		}

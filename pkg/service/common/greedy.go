@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/spf13/cast"
-	"github.com/thinkeridea/go-extend/exstrings"
 	"gomokuAI/pkg/dal"
 	"gomokuAI/pkg/util"
 	"sort"
@@ -33,11 +32,7 @@ func solveFirst(ctx *Context, chess [][]int, x, y, player int) int {
 	//}(time.Now())
 	initScore := 0
 	k := float64(1)
-	// 后手方下 主要考虑对对方的影响，进行围堵
-	if player == 2 && ctx.FirstPlayer != "AI" {
-		k = dal.ScoreMultiNum
-	}
-	if player == 1 && ctx.FirstPlayer == "AI" {
+	if player == 1 {
 		k = dal.ScoreMultiNum
 	}
 	for l := 0; l < 4; l++ {
@@ -64,9 +59,9 @@ func solveFirst(ctx *Context, chess [][]int, x, y, player int) int {
 			}
 			line = fmt.Sprintf("%s%s", line, s)
 		}
-		s := exstrings.SubString(line, 0, 5)
-		count1 := util.CountChar(s, '1')
-		count2 := util.CountChar(s, '2')
+		//s := exstrings.SubString(line, 0, 5)
+		count1 := util.CountChar(line, 5, '1')
+		count2 := util.CountChar(line, 5, '2')
 		for i := 0; i < 5; i++ {
 			if count2 == 0 {
 				initScore += int(float64(dal.FirstScore[count1]) / k)
@@ -99,11 +94,7 @@ func solveSecond(ctx *Context, chess [][]int, x, y, player int) int {
 	//}(time.Now())
 	initScore := 0
 	k := float64(1)
-	// 先手方下 不太会考虑对对方的影响 主要看自己的收益 前面用了3-，所以逻辑不变
-	if player == 2 && ctx.FirstPlayer != "AI" {
-		k = dal.ScoreMultiNum
-	}
-	if player == 1 && ctx.FirstPlayer == "AI" {
+	if player == 1 {
 		k = dal.ScoreMultiNum
 	}
 	for l := 0; l < 4; l++ {
@@ -130,10 +121,10 @@ func solveSecond(ctx *Context, chess [][]int, x, y, player int) int {
 			}
 			line = fmt.Sprintf("%s%s", line, s)
 		}
-		s := exstrings.SubString(line, 0, 5)
+		//s := exstrings.SubString(line, 0, 5)
 		//count1 := strings.Count(s, "1")
-		count1 := util.CountChar(s, '1')
-		count2 := util.CountChar(s, '2')
+		count1 := util.CountChar(line, 5, '1')
+		count2 := util.CountChar(line, 5, '2')
 		for i := 0; i < 5; i++ {
 			if count2 == 0 {
 				initScore += int(float64(dal.SecondScore[count1]) / k)
