@@ -9,6 +9,13 @@ import (
 // h -> 活
 // m -> 眠
 
+func TestPointConnect(ctx *Context, chess [][]int, player int) {
+	fmt.Println("h2Pos: ", H2Pos(ctx, chess, player))
+	fmt.Println("M3Pos: ", M3Pos(ctx, chess, player))
+	fmt.Println("H3Pos: ", H3Pos(ctx, chess, player))
+	fmt.Println("Hm4Pos: ", Hm4Pos(ctx, chess, player))
+}
+
 // H2Pos 活2 （能下出活3，下其他的没意义
 func H2Pos(ctx *Context, chess [][]int, player int) [][]int {
 	ans := make([][]int, 0)
@@ -17,6 +24,7 @@ func H2Pos(ctx *Context, chess [][]int, player int) [][]int {
 			if chess[i][j] != 0 || NotRelative(ctx, i, j, 2, chess) {
 				continue
 			}
+			//fmt.Printf("h2pos: i:%d,j;%d", i, j)
 			if checkH3(chess, player, i, j) {
 				ans = append(ans, []int{i, j})
 			}
@@ -33,6 +41,7 @@ func M3Pos(ctx *Context, chess [][]int, player int) [][]int {
 			if chess[i][j] != 0 || NotRelative(ctx, i, j, 2, chess) { // ctx.UnRelativeMap[i*100+j] 后续能这么优化，担心有bug
 				continue
 			}
+			//fmt.Printf("m3pos: i:%d,j;%d", i, j)
 			if checkM4(chess, player, i, j) {
 				ans = append(ans, []int{i, j})
 			}
@@ -109,7 +118,7 @@ func checkH3(chess [][]int, player, x, y int) bool {
 		}
 		checkLen := 6
 		if len(line) < checkLen {
-			return false
+			continue
 		}
 		count1 := util.CountChar(line, checkLen, '1')
 		for i := 0; i <= len(line)-checkLen; i++ {
@@ -167,12 +176,12 @@ func checkM4(chess [][]int, player, x, y int) bool {
 		}
 		checkLen := 5
 		if len(line) < checkLen {
-			return false
+			continue
 		}
 		count1 := util.CountChar(line, checkLen, '1')
 		for i := 0; i <= len(line)-checkLen; i++ {
-			// 边上都为0，内部有3个1
-			if count1 == 3 && line[i] == '0' && line[i+checkLen-1] == '0' {
+			// 内部有4个1
+			if count1 == 4 {
 				return true
 			}
 
@@ -195,13 +204,15 @@ func checkH4(chess [][]int, player, x, y int) bool {
 	for l := 0; l < 4; l++ {
 		count := 1
 		idx := 0
+		notFound := false
 		for {
 			idx++
 			xx := x + idx*dal.Dx[l]
 			yy := y + idx*dal.Dy[l]
 			if util.Out(xx, yy) {
 				// 碰到2就不是活4了
-				return false
+				notFound = true
+				break
 			}
 			if chess[xx][yy] == player {
 				count++
@@ -210,8 +221,12 @@ func checkH4(chess [][]int, player, x, y int) bool {
 				count++
 				break
 			} else {
-				return false
+				notFound = true
+				break
 			}
+		}
+		if notFound {
+			continue
 		}
 		idx = 0
 		for {
@@ -219,7 +234,8 @@ func checkH4(chess [][]int, player, x, y int) bool {
 			xx := x + idx*dal.Dx[l]
 			yy := y + idx*dal.Dy[l]
 			if util.Out(xx, yy) {
-				return false
+				notFound = true
+				break
 			}
 			if chess[xx][yy] == player {
 				count++
@@ -228,8 +244,12 @@ func checkH4(chess [][]int, player, x, y int) bool {
 				count++
 				break
 			} else {
-				return false
+				notFound = true
+				break
 			}
+		}
+		if notFound {
+			continue
 		}
 		if count >= 6 {
 			return true

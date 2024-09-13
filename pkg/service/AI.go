@@ -156,63 +156,57 @@ func getInitDeep(ctx *common.Context) int64 {
 	if cnt > 5 {
 		deep = 11
 	}
-	//if cnt > 8 {
-	//	deep = 13
-	//switch cnt % 2 {
-	//case 0:
-	//	deep = 11
-	//case 1:
-	//	deep = 9
-	//case 2:
-	//	deep = 8
-	//}
-	//}
 	if cnt > 25 {
 		deep = 9
 	}
-	//if cnt > 34 {
-	//	deep = 7
-	//}
-	//if Cnt > 17 {
-	//	switch Cnt % 2 {
-	//	case 0:
-	//		deep = 14
-	//	case 1:
-	//		deep = 12
-	//		//case 2:
-	//		//	deep = 8
-	//	}
-	//}
 	return deep
 }
 
 func AI(ctx *common.Context, chess [][]int) (int, int) {
+	defer func(tm time.Time) {
+		util.ShowAllTime()
+		elapsed := time.Since(tm)
+		fmt.Println("cost time:", elapsed)
+	}(time.Now())
+	tm := time.Now()
 	dal.CntMap[ctx.ID]++
 	util.ClearTimeMap()
 	ctx.UnRelativeMap = common.GetUnRelativeMap(ctx, chess)
-	t := time.Now()
 	var px, py int
+	// vc
+	common.TestPointConnect(ctx, chess, 2)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	newChess := util.DeepCopyChess(chess)
+	var retMust int
+	go func() {
+		defer wg.Done()
+		retMust = CheckVcWithCache(ctx, newChess, 1, 0)
+	}()
+	ret := CheckVcWithCache(ctx, chess, 2, 0)
+	if ret >= 0 {
+		fmt.Printf("vc win,ret: %d\n", ret)
+		px = ret / 100
+		py = ret % 100
+		return px, py
+	}
+	wg.Wait()
+	if retMust >= 0 {
+		fmt.Printf("vc must here! ret: %d\n", retMust)
+		px = retMust / 100
+		py = retMust % 100
+		return px, py
+	}
+	fmt.Println("vc time:", time.Since(tm).Seconds())
+	// ab
 	deep := getInitDeep(ctx)
+	deep = 6
 	dal.NumMap[ctx.ID] = 10
 	fmt.Println("deep: ", deep, " cnt: ", dal.CntMap[ctx.ID])
 	v := int(ab(ctx, deep, -100000000000000, 1000000000000, 2, 1, chess))
-	py = v % 100
 	px = v / 100
-	//for d := int64(2); d <= 6; d += 2 {
-	//	v := int(ab(d, -100000000000000, 1000000000000, 2, 1, chess))
-	//	newScore := v / 10000
-	//	v -= newScore * 10000
-	//	py = v % 100
-	//	px = v / 100
-	//	// 有必胜方案直接退出
-	//	if newScore >= 10000 {
-	//		break
-	//	}
-	//}
-	util.ShowAllTime()
+	py = v % 100
 	fmt.Println(evalScore(ctx, 1, chess), evalScore(ctx, 2, chess))
-	elapsed := time.Since(t)
-	fmt.Println("cost time:", elapsed)
 	return px, py
 }
 
@@ -342,19 +336,19 @@ func ab(ctx *common.Context, depth, alpha, beta, player, firstLevel int64, chess
 			}
 		}
 		if firstLevel > 0 {
-			if alpha <= 1000 {
-				dal.ScoreMultiNum = 1
-			}
-			if alpha > 1000 {
-				dal.ScoreMultiNum = 1.5
-			}
-			if alpha > 2000 {
-				dal.ScoreMultiNum = 2
-			}
-			if alpha > 4000 {
-				dal.ScoreMultiNum = 2.5
-			}
-			fmt.Println("k: ", dal.ScoreMultiNum)
+			//if alpha <= 1000 {
+			//	dal.ScoreMultiNum = 1
+			//}
+			//if alpha > 1000 {
+			//	dal.ScoreMultiNum = 1.5
+			//}
+			//if alpha > 2000 {
+			//	dal.ScoreMultiNum = 2
+			//}
+			//if alpha > 4000 {
+			//	dal.ScoreMultiNum = 2.5
+			//}
+			//fmt.Println("k: ", dal.ScoreMultiNum)
 			res := int64(px*100 + py)
 			return res
 		}

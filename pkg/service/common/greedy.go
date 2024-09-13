@@ -212,13 +212,8 @@ func NotRelative(ctx *Context, x, y, length int, chess [][]int) bool {
 	//defer func(tm time.Time) {
 	//	util.AddTime(util.GetCurrentFuncName()+ctx.ID, time.Since(tm))
 	//}(time.Now())
-	if dal.CntMap[ctx.ID] <= 2 {
-		dal.Param = 1
-	} else {
-		dal.Param = length
-	}
-	for i := -dal.Param; i <= dal.Param; i++ {
-		for j := -dal.Param; j <= dal.Param; j++ {
+	for i := -length; i <= length; i++ {
+		for j := -length; j <= length; j++ {
 			if util.Out(x+i, y+j) {
 				continue
 			}

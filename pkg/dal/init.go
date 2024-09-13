@@ -9,7 +9,7 @@ var NumMap map[string]int
 
 var Param int
 
-var MaxVcDepth = 15
+var MaxVcDepth int
 
 var ScoreMultiNum float64
 
@@ -33,6 +33,8 @@ func init() {
 	ScoreMultiNum = 1
 
 	Param = 2
+
+	MaxVcDepth = 13
 
 	Dx = []int{1, 1, 1, 0}
 	Dy = []int{-1, 0, 1, 1}

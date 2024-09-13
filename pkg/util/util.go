@@ -166,3 +166,15 @@ func CountChar(s string, n int, c byte) int {
 	}
 	return ans
 }
+
+func DeepCopyChess(chess [][]int) [][]int {
+	data := make([][]int, 0)
+	for i := 0; i < 15; i++ {
+		tmp := make([]int, 0)
+		for j := 0; j < 15; j++ {
+			tmp = append(tmp, chess[i][j])
+		}
+		data = append(data, tmp)
+	}
+	return data
+}
