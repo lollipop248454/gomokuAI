@@ -9,6 +9,8 @@ var NumMap map[string]int
 
 var Param int
 
+var MaxVcDepth = 15
+
 var ScoreMultiNum float64
 
 var Score map[string]int64

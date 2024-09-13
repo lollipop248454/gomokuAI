@@ -75,7 +75,7 @@ func Hm4Pos(ctx *Context, chess [][]int, player int) [][]int {
 
 // checkH3 下x,y能形成活3 判断010110 011100 边上2个必须是0，内部4个有3个1就行了 checked
 func checkH3(chess [][]int, player, x, y int) bool {
-	// 默认1为player自己
+	// 默认"1"为player自己
 	for l := 0; l < 4; l++ {
 		line := "1"
 		// 因为1和最远的边界距离也就是4
